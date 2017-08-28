@@ -2,7 +2,7 @@
 **
 ** Copyright (C) 2015 WxMaper (http://wxmaper.ru)
 **
-** This file is part of the PQEngineCore extension of the PQEngine.
+** This file is part of the PQEngine.
 **
 ** BEGIN LICENSE: MPL 2.0
 **
@@ -14,23 +14,13 @@
 **
 ****************************************************************************/
 
-#include "pqenginecore.h"
+#ifndef PQ_TYPES_H
+#define PQ_TYPES_H
 
-//#include "plastiqclasses/core/plastiqqobject.h"
-//#include "plastiqclasses/core/plastiqqtimer.h"
-#include <QSettings>
-#include <QStandardPaths>
+#include <QMetaType>
 
-QMetaObjectList PQEngineCore::classes() {
-    QMetaObjectList classes;
+#define PQ_STATIC_PREFIX "static_"
+#define PQ_STATIC(M) static_##M
+#define PQ_IS_STATIC !__pq_thisPtr
 
-    return classes;
-}
-
-bool PQEngineCore::start() {
-    return true;
-}
-
-bool PQEngineCore::finalize() {
-    return true;
-}
+#endif // PQ_TYPES_H

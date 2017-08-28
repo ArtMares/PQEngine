@@ -1,3 +1,19 @@
+/****************************************************************************
+**
+** Copyright (C) 2015 WxMaper (http://wxmaper.ru)
+**
+** This file is part of the PHPQt5.
+**
+** BEGIN LICENSE: MPL 2.0
+**
+** This Source Code Form is subject to the terms of the Mozilla Public
+** License, v. 2.0. If a copy of the MPL was not distributed with this
+** file, You can obtain one at http://mozilla.org/MPL/2.0/.
+**
+** END LICENSE
+**
+****************************************************************************/
+
 #include "phpqt5.h"
 #include "ipqengineext.h"
 
@@ -44,41 +60,24 @@ void PHPQt5::zif_R(INTERNAL_FUNCTION_PARAMETERS)
     RETURN_STRING(rpath.constData());
 }
 
-void PHPQt5::zif_qApp(INTERNAL_FUNCTION_PARAMETERS)
-{
-#ifdef PQDEBUG
-    PQDBG_LVL_START(__FUNCTION__);
-#endif
-
-    if(ZEND_NUM_ARGS() > 0) {
-        zend_wrong_paramers_count_error(ZEND_NUM_ARGS(), 0 ,0);
-    }
-
-    zval zo = objectFactory()->getZObject(qApp PQDBG_LVL_CC);
-
-    PQDBG_LVL_DONE();
-    RETURN_ZVAL(&zo, 1, 0);
-}
-
+/*
 void PHPQt5::zif_emit(INTERNAL_FUNCTION_PARAMETERS)
 {
 #ifdef PQDEBUG
     PQDBG_LVL_START(__FUNCTION__);
 #endif
 
-    int error = 0;
     QString className = "";
-
 
     void *TSRMLS_CACHE = tsrm_get_ls_cache();
 
     zend_object *zo = zend_get_this_object(EG(current_execute_data));
 
-    if(zo && zo->ce) {
+    if (zo && zo->ce) {
         zval zobject;
         ZVAL_OBJ(&zobject, zo);
 
-        if(pq_test_ce(&zobject PQDBG_LVL_CC)) {
+        if (pq_test_ce(&zobject PQDBG_LVL_CC)) {
             className = QString(Z_OBJCE_NAME(zobject));
 
             char *signal_signature;
@@ -90,7 +89,7 @@ void PHPQt5::zif_emit(INTERNAL_FUNCTION_PARAMETERS)
                 return;
             }
 
-            QObject *qo = objectFactory()->getQObject(&zobject PQDBG_LVL_CC);
+            QObject *qo = Q_NULLPTR;//objectFactory()->getQObject(&zobject);
 
             if(qo != nullptr) {
                 bool haveSignalConnection = false;
@@ -121,7 +120,6 @@ void PHPQt5::zif_emit(INTERNAL_FUNCTION_PARAMETERS)
                     RETURN_NULL();
                 }
 
-
                 if(QMetaObject::invokeMethod(qo,
                                              "haveSignalConnection",
                                              Qt::DirectConnection,
@@ -149,20 +147,61 @@ void PHPQt5::zif_emit(INTERNAL_FUNCTION_PARAMETERS)
                 }
                 #endif
             }
-
         }
         else {
-            error = 2;
+            pq_php_error("Call EMIT from non QObject object!");
         }
     }
     else {
-        error = 1;
+        pq_php_error("Call EMIT without object!");
+    }
+}
+*/
+
+void PHPQt5::zif_qenum(INTERNAL_FUNCTION_PARAMETERS)
+{
+#ifdef PQDEBUG
+    PQDBG_LVL_START(__FUNCTION__);
+#endif
+
+    zval *enum_zval;
+
+    if(zend_parse_parameters_throw(ZEND_NUM_ARGS(), "z", &enum_zval) == FAILURE) {
+        PQDBG_LVL_DONE();
+        return;
     }
 
+    zval zenum;
+    zend_class_entry *ce = PHPQt5::objectFactory()->getClassEntry("QEnum");
+    object_init_ex(&zenum, ce);
 
+    PQObjectWrapper *pqenum = fetch_pqobject(Z_OBJ(zenum));
+    pqenum->object = Q_NULLPTR;
+    pqenum->isEnum = true;
+    pqenum->isValid = true;
 
-    pq_pre(QString("error: %1\nclassName: %2").arg(error).arg(className), "");
+    // Z_DELREF(pqenum);
 
+    switch(Z_TYPE_P(enum_zval)) {
+    case IS_LONG:
+        pqenum->enumVal = qint64(Z_LVAL_P(enum_zval));
+        break;
+
+    case IS_DOUBLE:
+        pqenum->enumVal = qint64(Z_DVAL_P(enum_zval));
+        break;
+
+    default:
+#if (PHP_VERSION_ID < 70101)
+        zend_wrong_paramer_class_error(1, (char*) "long", enum_zval);
+#else
+        zend_wrong_parameter_class_error(1, (char*) "long", enum_zval);
+#endif
+
+    }
+
+    RETVAL_ZVAL(&zenum, 0, 0);
+    PQDBG_LVL_DONE();
 }
 
 void PHPQt5::zif_SIGNAL(INTERNAL_FUNCTION_PARAMETERS)
@@ -174,10 +213,10 @@ void PHPQt5::zif_SIGNAL(INTERNAL_FUNCTION_PARAMETERS)
         return;
     }
 
-    QString qstring = QString(signal);
-    qstring.prepend("2");
+    QByteArray str = QMetaObject::normalizedSignature(signal);
+    str.prepend("2");
 
-    RETURN_STRING(qstring.toUtf8().constData());
+    RETURN_STRINGL(str.constData(), str.length());
 }
 
 void PHPQt5::zif_SLOT(INTERNAL_FUNCTION_PARAMETERS)
@@ -189,61 +228,10 @@ void PHPQt5::zif_SLOT(INTERNAL_FUNCTION_PARAMETERS)
         return;
     }
 
-    QString qstring = QString(slot);
-    qstring.prepend("1");
+    QByteArray str = QMetaObject::normalizedSignature(slot);
+    str.prepend("1");
 
-    RETURN_STRING(qstring.toUtf8().constData());
-}
-
-void PHPQt5::zif_connect(INTERNAL_FUNCTION_PARAMETERS)
-{
-#ifdef PQDEBUG
-    PQDBG_LVL_START(__FUNCTION__);
-#endif
-
-    zval *z_sender;
-    zval *z_signal;
-    zval *z_receiver;
-    zval *z_slot;
-
-    if (zend_parse_parameters(ZEND_NUM_ARGS(), "zzzz", &z_sender, &z_signal, &z_receiver, &z_slot) == FAILURE) {
-        PQDBG_LVL_DONE();
-        return;
-    }
-
-    PQDBG_LVL_DONE();
-    RETURN_BOOL( pq_connect(z_sender, z_signal, z_receiver, z_slot, false PQDBG_LVL_CC) );
-}
-
-void PHPQt5::zif_pre(INTERNAL_FUNCTION_PARAMETERS)
-{
-#ifdef PQDEBUG
-    PQDBG_LVL_START(__FUNCTION__);
-#endif
-
-    zval *pzval;
-    char *_title;
-    int _title_len;
-
-    if(zend_parse_parameters(ZEND_NUM_ARGS(), "z|s", &pzval, &_title, &_title_len) == FAILURE) {
-        #ifdef PQDEBUG
-            PQDBG_LVL_DONE();
-        #endif
-
-        return;
-    }
-
-    php_output_start_default();
-    zend_print_zval_r(pzval, 0);
-    php_output_get_contents(return_value);
-
-    QString title = ZEND_NUM_ARGS() == 1 ? qApp->applicationName() : QString(_title);
-    pq_pre(toUTF8( Z_STRVAL_P(return_value) ), title);
-
-    php_output_discard();
-
-    PQDBG_LVL_DONE();
-    RETURN_TRUE;
+    RETURN_STRINGL(str.constData(), str.length());
 }
 
 void PHPQt5::zif_disconnect(INTERNAL_FUNCTION_PARAMETERS)
@@ -266,7 +254,9 @@ void PHPQt5::zif_disconnect(INTERNAL_FUNCTION_PARAMETERS)
     }
 
     PQDBG_LVL_DONE();
-    RETURN_BOOL( pq_connect(z_sender, z_signal, z_receiver, z_slot, true PQDBG_LVL_CC) )
+    // FIXME: исправить 0_0
+    RETURN_FALSE;
+    //RETURN_BOOL( pq_connect(z_sender, z_signal, z_receiver, z_slot, true PQDBG_LVL_CC) )
 }
 
 
@@ -287,20 +277,8 @@ void PHPQt5::zif_c(INTERNAL_FUNCTION_PARAMETERS)
         RETURN_NULL();
     }
 
-    /*
-    QString sObjectName = QString(objectName);
-    int zhandle = objectFactory()->getObjectHandleByObjectName(sObjectName);
 
-    zval retval = objectFactory()->getZObject(zhandle);
-
-    if(Z_TYPE(retval) == IS_OBJECT) {
-        RETURN_ZVAL(&retval, 1, 0);
-    }
-
-    RETURN_NULL();
-    */
-
-    QList<zval> zobjects = objectFactory()->getZObjectsByName(objectName PQDBG_LVL_CC);
+    QList<zval> zobjects;// = objectFactory()->getZObjectsByName(objectName);
 
     array_init(return_value);
     foreach (zval zobject, zobjects) {
@@ -494,6 +472,13 @@ void PHPQt5::zif_aboutPQ(INTERNAL_FUNCTION_PARAMETERS)
         zval array;
         array_init(&array);
 
+        add_assoc_string(&array, "QT_VERSION", (char *)QT_VERSION_STR);
+        add_assoc_string(&array, "QT_VERSION_MAJOR", (char *)QT_VERSION_MAJOR);
+        add_assoc_string(&array, "QT_VERSION_MINOR", (char *)QT_VERSION_MINOR);
+        add_assoc_string(&array, "QT_VERSION_PATCH", (char *)QT_VERSION_PATCH);
+
+        add_assoc_string(&array, "MSC_FULL_VER", (char *)_MSC_FULL_VER);
+
         add_assoc_string(&array, "ZEND_VERSION", (char *)ZEND_VERSION);
         add_assoc_long(&array, "PHP_MAJOR_VERSION", PHP_MAJOR_VERSION);
         add_assoc_long(&array, "PHP_MINOR_VERSION", PHP_MINOR_VERSION);
@@ -519,10 +504,14 @@ void PHPQt5::zif_aboutPQ(INTERNAL_FUNCTION_PARAMETERS)
         RETURN_ZVAL(&array, 1, 0);
     }
     else {
-        QString about = QString("<b>ZEND API</b>: %1<br>\n"
-                                "<b>PHP version</b>: %2<br>\n"
-                                "<b>PQEngine version</b>: %3 (%4)<br>\n"
-                                "<b>PQExtensions API version</b>: %5<br>\n")
+        QString about = QString("<b>Qt version</b>: %1<br>\n"
+                                "<b>MSVC version</b>: %2<br>\n"
+                                "<b>ZEND API</b>: %3<br>\n"
+                                "<b>PHP version</b>: %4<br>\n"
+                                "<b>PQEngine version</b>: %5 (%6)<br>\n"
+                                "<b>PQExtensions API version</b>: %7<br>\n")
+                .arg(QT_VERSION_STR)
+                .arg(_MSC_FULL_VER)
                 .arg(ZEND_VERSION)
                 .arg(PHP_VERSION)
                 .arg(PQENGINE_VERSION)
@@ -534,136 +523,6 @@ void PHPQt5::zif_aboutPQ(INTERNAL_FUNCTION_PARAMETERS)
         PQDBG_LVL_DONE();
         RETURN_NULL();
     }
-}
-
-void PHPQt5::zif_setQStringCodePage(INTERNAL_FUNCTION_PARAMETERS)
-{
-#ifdef PQDEBUG
-    PQDBG_LVL_START(__FUNCTION__);
-#endif
-
-    char *code_page;
-    int code_page_len;
-
-    if(zend_parse_parameters(ZEND_NUM_ARGS(), "s", &code_page, &code_page_len) == FAILURE) {
-        PQDBG_LVL_DONE();
-        return;
-    }
-
-    W_CP = QByteArray(code_page);
-
-    PQDBG_LVL_DONE();
-    RETURN_TRUE;
-}
-
-void PHPQt5::zif_pqinclude(INTERNAL_FUNCTION_PARAMETERS)
-{
-#ifdef PQDEBUG
-    PQDBG_LVL_START(__FUNCTION__);
-#endif
-
-    char *filename;
-    int filename_len;
-
-    if(zend_parse_parameters(ZEND_NUM_ARGS(), "s", &filename, &filename_len) == FAILURE) {
-        PQDBG_LVL_DONE();
-        return;
-    }
-
-    QFile file(filename);
-
-    if(!file.exists()) {
-        php_error(E_WARNING,
-                  QString("pqinclude(\"%1\"): failed to open stream: No such file or directory")
-                  .arg(filename).toUtf8().constData());
-        PQDBG_LVL_DONE();
-        RETURN_FALSE;
-    }
-
-    if(!file.open(QIODevice::ReadOnly)) {
-        php_error(E_WARNING,
-                  QString("pqinclude(\"%1\"): failed to open stream: %2")
-                  .arg(filename).arg(file.errorString()).toUtf8().constData());
-        PQDBG_LVL_DONE();
-        RETURN_FALSE;
-    }
-
-    QByteArray data_ba = file.readAll();
-    QDataStream dataStream(data_ba);
-
-    zend_stream zs;
-    zs.reader = pq_stream_reader;
-    zs.closer = pq_stream_closer;
-    zs.fsizer = pq_stream_fsizer;
-    zs.handle = &dataStream;
-
-    zend_file_handle file_handle;
-    file_handle.type = ZEND_HANDLE_STREAM;
-    file_handle.filename = QByteArray(filename).constData();
-    file_handle.free_filename = 0;
-    file_handle.opened_path = NULL;
-    file_handle.handle.stream = zs;
-
-    if(php_execute_script(&file_handle) == SUCCESS) {
-        PQDBG_LVL_DONE();
-        RETURN_TRUE;
-    }
-    else {
-        PQDBG_LVL_DONE();
-        RETURN_FALSE;
-    }
-}
-
-void PHPQt5::zif_pqread(INTERNAL_FUNCTION_PARAMETERS)
-{
-#ifdef PQDEBUG
-    PQDBG_LVL_START(__FUNCTION__);
-#endif
-
-    char *filename;
-    int filename_len;
-
-    if(zend_parse_parameters(ZEND_NUM_ARGS(), "s", &filename, &filename_len) == FAILURE) {
-        #ifdef PQDEBUG
-            PQDBG_LVL_DONE();
-        #endif
-
-        return;
-    }
-
-    QFile file(filename);
-
-    if(!file.exists()) {
-        php_error(E_WARNING,
-                  QString("pqread(\"%1\"): failed to open stream: No such file or directory")
-                  .arg(filename).toUtf8().constData());
-
-        #ifdef PQDEBUG
-            PQDBG_LVL_DONE();
-        #endif
-
-        RETURN_FALSE;
-    }
-
-    if(!file.open(QIODevice::ReadOnly)) {
-        php_error(E_WARNING,
-                  QString("pqread(\"%1\"): failed to open stream: %2")
-                  .arg(filename).arg(file.errorString()).toUtf8().constData());
-
-        #ifdef PQDEBUG
-            PQDBG_LVL_DONE();
-        #endif
-
-        RETURN_FALSE;
-    }
-
-    QByteArray data_ba = file.readAll();
-
-    pq_return_qvariant(data_ba, INTERNAL_FUNCTION_PARAM_PASSTHRU PQDBG_LVL_CC);
-
-#ifdef PQDEBUG
-    PQDBG_LVL_DONE();
-#endif
 }
 
 #include "zend_language_scanner.h"
@@ -795,32 +654,183 @@ void PHPQt5::zif_pqpack(INTERNAL_FUNCTION_PARAMETERS)
     add_next_index_zval(&array, &point);\
 }
 
-void PHPQt5::zif_pqGetStarCoords(INTERNAL_FUNCTION_PARAMETERS)
+void PHPQt5::zif_qDebug(INTERNAL_FUNCTION_PARAMETERS)
 {
 #ifdef PQDEBUG
     PQDBG_LVL_START(__FUNCTION__);
 #endif
 
-    ZVAL_NEW_ARR(return_value);
+    const int argc = ZEND_NUM_ARGS();
+    zval *args = (zval *) safe_emalloc(argc, sizeof(zval), 0);
+    if (ZEND_NUM_ARGS() < 1
+            || zend_get_parameters_array_ex(argc, args) == FAILURE) {
+        efree(args);
+        WRONG_PARAM_COUNT;
+        PQDBG_LVL_DONE();
+    }
 
-    zval array;
-    array_init(&array);
+    for (int argn = 0; argn < argc; argn++) {
+        pq_qdbg_message(&args[argn], return_value, QStringLiteral("qDebug"));
+    }
 
-    ADD_STAR_POINT(array, 0, 0, 8);
-    ADD_STAR_POINT(array, 300, 165, 4);
-    ADD_STAR_POINT(array, 308, 198, 4);
-    ADD_STAR_POINT(array, 294, 232, 4);
-    ADD_STAR_POINT(array, 222, 322, 4);
-    ADD_STAR_POINT(array, 225, 405, 4);
+    efree(args);
 
-    ZVAL_ZVAL(return_value, &array, 1, 0);
-
-#ifdef PQDEBUG
     PQDBG_LVL_DONE();
-#endif
 }
 
-void PHPQt5::zif_test_one(INTERNAL_FUNCTION_PARAMETERS)
+void PHPQt5::zif_qWarning(INTERNAL_FUNCTION_PARAMETERS)
 {
+#ifdef PQDEBUG
+    PQDBG_LVL_START(__FUNCTION__);
+#endif
 
+    const int argc = ZEND_NUM_ARGS();
+    zval *args = (zval *) safe_emalloc(argc, sizeof(zval), 0);
+    if (ZEND_NUM_ARGS() < 1
+            || zend_get_parameters_array_ex(argc, args) == FAILURE) {
+        efree(args);
+        WRONG_PARAM_COUNT;
+        PQDBG_LVL_DONE();
+    }
+
+    for (int argn = 0; argn < argc; argn++) {
+        pq_qdbg_message(&args[argn], return_value, QStringLiteral("qWarning"));
+    }
+
+    efree(args);
+
+    PQDBG_LVL_DONE();
+}
+
+void PHPQt5::zif_qCritical(INTERNAL_FUNCTION_PARAMETERS)
+{
+#ifdef PQDEBUG
+    PQDBG_LVL_START(__FUNCTION__);
+#endif
+
+    const int argc = ZEND_NUM_ARGS();
+    zval *args = (zval *) safe_emalloc(argc, sizeof(zval), 0);
+    if (ZEND_NUM_ARGS() < 1
+            || zend_get_parameters_array_ex(argc, args) == FAILURE) {
+        efree(args);
+        WRONG_PARAM_COUNT;
+        PQDBG_LVL_DONE();
+    }
+
+    for (int argn = 0; argn < argc; argn++) {
+        pq_qdbg_message(&args[argn], return_value, QStringLiteral("qCritical"));
+    }
+
+    efree(args);
+
+    PQDBG_LVL_DONE();
+}
+
+void PHPQt5::zif_qInfo(INTERNAL_FUNCTION_PARAMETERS)
+{
+#ifdef PQDEBUG
+    PQDBG_LVL_START(__FUNCTION__);
+#endif
+
+    const int argc = ZEND_NUM_ARGS();
+    zval *args = (zval *) safe_emalloc(argc, sizeof(zval), 0);
+    if (ZEND_NUM_ARGS() < 1
+            || zend_get_parameters_array_ex(argc, args) == FAILURE) {
+        efree(args);
+        WRONG_PARAM_COUNT;
+        PQDBG_LVL_DONE();
+    }
+
+    for (int argn = 0; argn < argc; argn++) {
+        pq_qdbg_message(&args[argn], return_value, QStringLiteral("qInfo"));
+    }
+
+    efree(args);
+
+    PQDBG_LVL_DONE();
+}
+
+void PHPQt5::zif_qFatal(INTERNAL_FUNCTION_PARAMETERS)
+{
+#ifdef PQDEBUG
+    PQDBG_LVL_START(__FUNCTION__);
+#endif
+
+    zval *value;
+    if(zend_parse_parameters(ZEND_NUM_ARGS(), "z", &value) == FAILURE) {
+        php_error(E_PARSE, "wrong parameters for qFatal");
+        PQDBG_LVL_RETURN();
+    }
+
+    pq_qdbg_message(value, return_value, "qFatal");
+    php_error(E_ERROR, Z_STRVAL_P(return_value));
+
+    PQDBG_LVL_DONE();
+}
+
+void PHPQt5::zif_qvariant_cast(INTERNAL_FUNCTION_PARAMETERS)
+{
+#ifdef PQDEBUG
+    PQDBG_LVL_START(__FUNCTION__);
+#endif
+
+    zval *zobject;
+    QByteArray typeName;
+
+    int argc = ZEND_NUM_ARGS();
+
+    switch(argc) {
+    case 1:
+        if(zend_parse_parameters(ZEND_NUM_ARGS(), "z", &zobject) == FAILURE) {
+            PQDBG_LVL_DONE();
+            RETURN_NULL();
+        }
+
+        break;
+
+    case 2: {
+        const char* type_name;
+        int type_name_len;
+
+        if(zend_parse_parameters(ZEND_NUM_ARGS(), "sz", &type_name, &type_name_len, &zobject) == FAILURE) {
+            PQDBG_LVL_DONE();
+            RETURN_NULL();
+        }
+
+        typeName = QByteArray(type_name, type_name_len);
+    } break;
+
+    default:
+#if (PHP_VERSION_ID < 70101)
+        zend_wrong_paramers_count_error(argc, 1, 2);
+#else
+        zend_wrong_parameters_count_error(argc, 1, 2);
+#endif
+
+        PQDBG_LVL_DONE();
+        RETURN_NULL();
+    }
+
+    if(Z_TYPE_P(zobject) != IS_OBJECT) {
+#if (PHP_VERSION_ID < 70101)
+        zend_wrong_paramer_type_error(1, zend_expected_type(IS_OBJECT), zobject);
+#else
+        zend_wrong_parameter_type_error(1, zend_expected_type(IS_OBJECT), zobject);
+#endif
+        PQDBG_LVL_DONE();
+        RETURN_NULL();
+    }
+
+    if(Z_OBJCE_NAME_P(zobject) != QByteArray("QVariant")) {
+        zend_throw_error(NULL, "qvariant_cast() expects parameter 1 to be a <b>QVariant</b>, <b>%s</b> given",
+                         Z_OBJCE_NAME_P(zobject));
+    }
+
+    PQObjectWrapper *pqobject = fetch_pqobject(Z_OBJ_P(zobject));
+    QVariant *v = reinterpret_cast<QVariant*>(pqobject->object->plastiq_data());
+    zval retval = plastiq_cast_to_zval(*v, typeName);
+
+    RETVAL_ZVAL(&retval, 1, 0);
+
+    PQDBG_LVL_DONE();
 }

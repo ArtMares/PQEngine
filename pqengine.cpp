@@ -1,39 +1,45 @@
+/****************************************************************************
+**
+** Copyright (C) 2015 WxMaper (http://wxmaper.ru)
+**
+** This file is part of the PQEngine.
+**
+** BEGIN LICENSE: MPL 2.0
+**
+** This Source Code Form is subject to the terms of the Mozilla Public
+** License, v. 2.0. If a copy of the MPL was not distributed with this
+** file, You can obtain one at http://mozilla.org/MPL/2.0/.
+**
+** END LICENSE
+**
+****************************************************************************/
+
 #include <QTextStream>
 #include "pqtypes.h"
 #include "pqengine.h"
 #include "pqengine_private.h"
 
 /* Static vars */
-PQEnginePrivate *m_engine;
+PQEnginePrivate *PQEngine::pqeEngine;
 bool PQEngine::pqeInitialized = false;
-PQExtensionList PQEngine::m_extensions;
-QByteArray m_corename;
+PQExtensionList PQEngine::pqeExtensions;
+QString PQEngine::pqeCoreName;
+
+#include <QMutex>
 #include <QtGlobal>
+
 /* PQEngine class */
 PQEngine::PQEngine(PQExtensionList extensions)
 {
-    m_extensions = extensions;
+    pqeExtensions = extensions;
 }
 
-bool PQEngine::init(int argc,
-                    char **argv,
-                    QString pmd5,
-                    const QString &coreName,
-                    bool checkName,
-                    const QString &hashKey,
-                    const QString &appName,
-                    const QString &appVersion,
-                    const QString &orgName,
-                    const QString &orgDomain)
+bool PQEngine::init(int argc, char **argv, const QString &coreName, const PQEngineInitConf &ic)
 {
-    qRegisterMetaType<PQClosure>("PQClosure");
-    //qRegisterMetaType<PQClosure*>("PQClosure*");
+    pqeCoreName = coreName;
+    pqeEngine = new PQEnginePrivate(pqeExtensions);
 
-    m_corename = coreName.toUtf8();
-    m_engine = new PQEnginePrivate(m_extensions);
-
-    pqeInitialized = m_engine->init(argc, argv, pmd5, coreName, checkName, hashKey, appName, appVersion, orgName, orgDomain);
-    pmd5.fill(0);
+    pqeInitialized = pqeEngine->init(argc, argv, coreName, ic);
 
     return pqeInitialized;
 }
@@ -42,9 +48,9 @@ int PQEngine::exec(const char *script)
 {
     if(pqeInitialized) {
 #ifdef PQDEBUG
-        return m_engine->exec(script, 0);
+        return pqeEngine->exec(script, 0);
 #else
-        return m_engine->exec(script);
+        return pqeEngine->exec(script);
 #endif
     }
 
@@ -75,41 +81,45 @@ void default_ub_write(const QString &msg, const QString &title)
 {
     QString m = cleanTag(msg);
 
-/*
-#ifdef PQDEBUG
-    QString filename = qApp->applicationDirPath() + "/pqdebug.log";
-
-    QFile file(filename);
-    if ( file.open(QIODevice::ReadWrite | QIODevice::Append | QIODevice::Text) )
-    {
-        QTextStream stream(&file);
-        stream << m.toUtf8().constData() << endl;
-        stream.flush();
-        file.close();
-    }
-#endif
-*/
-
     if(title.length()) {
-        QTextStream( stdout ) << title << m.toUtf8().constData() << endl;
+        QTextStream( stdout ) << QString(title).prepend("[").append("] ") << m.toUtf8().constData() << endl;
     }
     else {
         QTextStream( stdout ) << m.toUtf8().constData() << endl;
     }
 }
 
+void error_ub_write(const QString &msg, const QString &title)
+{
+    QString m = cleanTag(msg);
+
+    if(title.length()) {
+        QTextStream( stderr ) << QString(title).prepend("[").append("] ") << m.toUtf8().constData() << endl;
+    }
+    else {
+        QTextStream( stderr ) << m.toUtf8().constData() << endl;
+    }
+}
+
+
 #ifdef PQDEBUG
 int __pqdbg_current_d_lvl = 0;
 int __pqdbg_current_d_line = 0;
 
 int pqdbg_get_current_lvl() {
-    return __pqdbg_current_d_lvl;
+    static QMutex mutex;
+
+    mutex.lock();
+    int retval = __pqdbg_current_d_lvl;
+    mutex.unlock();
+
+    return retval;
 }
 
 QString pqdbg_get_current_line() {
-    QString line = QString::number(__pqdbg_current_d_line);
+    QString line = QString::number(pqdbg_get_current_lvl());
 
-    while(line.length() < 5) {
+    while(line.length() < 7) {
         line.prepend("0");
     }
 
@@ -117,14 +127,22 @@ QString pqdbg_get_current_line() {
 }
 
 void pqdbg_current_line_inc() {
+    static QMutex mutex;
+
+    mutex.lock();
     __pqdbg_current_d_line++;
+    mutex.unlock();
 }
 
 void pqdbg_set_current_lvl(int lvl) {
+    static QMutex mutex;
+
+    mutex.lock();
     __pqdbg_current_d_lvl = lvl;
+    mutex.unlock();
 }
 #endif
 
-QByteArray getCorename() {
-    return m_corename;
+QString getCorename() {
+    return PQEngine::pqeCoreName;
 }

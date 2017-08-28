@@ -1,21 +1,41 @@
+/****************************************************************************
+**
+** Copyright (C) 2015 WxMaper (http://wxmaper.ru)
+**
+** This file is part of the PQEngine.
+**
+** BEGIN LICENSE: MPL 2.0
+**
+** This Source Code Form is subject to the terms of the Mozilla Public
+** License, v. 2.0. If a copy of the MPL was not distributed with this
+** file, You can obtain one at http://mozilla.org/MPL/2.0/.
+**
+** END LICENSE
+**
+****************************************************************************/
+
 #ifndef PQENGINE_GLOBAL_H
 #define PQENGINE_GLOBAL_H
 
 #define PQENGINE_MAJOR_VERSION 0
-#define PQENGINE_MINOR_VERSION 5
-#define PQENGINE_RELEASE_VERSION 2
-#define PQENGINE_CODENAME "HOROLOGIUM"
-#define PQENGINE_VERSION "0.5.2"
-#define PQENGINE_VERSION_ID 52
+#define PQENGINE_MINOR_VERSION 6
+#define PQENGINE_RELEASE_VERSION 6
+#define PQENGINE_CODENAME "ANDROMEDA"
+#define PQENGINE_VERSION "0.6.6"
+#define PQENGINE_VERSION_ID 66
 
 extern void default_ub_write(const QString &msg, const QString &title);
-extern QByteArray getCorename();
+extern void error_ub_write(const QString &msg, const QString &title);
+extern QString getCorename();
 
 #ifdef PQDEBUG
+#include <QMap>
 extern int pqdbg_get_current_lvl();
 extern QString pqdbg_get_current_line();
 extern void pqdbg_current_line_inc();
 extern void pqdbg_set_current_lvl(int lvl);
+extern void pqdbg_send_message(int lvl, const QString &msg, const QString &title);
+extern void pqdbg_send_message(const QMap<QString,QString> &msgmap);
 #endif
 
 #define Z_OBJCE_NAME(zval)          (Z_OBJCE((zval)))->name->val
@@ -23,6 +43,7 @@ extern void pqdbg_set_current_lvl(int lvl);
 
 #ifdef PQDEBUG
     #include <QDebug>
+    #include <QLocalSocket>
 
     #define PQDBG_LVL_D int __pq_debug_level
     #define PQDBG_LVL_DC , PQDBG_LVL_D
@@ -36,15 +57,16 @@ extern void pqdbg_set_current_lvl(int lvl);
     /* Returns increased debug level. Not affects to level in current scope */
     #define PQDBG_LVL_PUP(up) (PQDBG_LVL_C+up)
 
-    #define PQDBG(msg) default_ub_write(msg, "D0: ");
-    #define PQDBG2(line1, line2) default_ub_write(QString("%1 %2").arg(QString(line1)).arg(QString(line2)), "D0: ");
+    #define PQDBG(msg) default_ub_write(msg, "D0");
+    #define PQDBG2(line1, line2) default_ub_write(QString("%1 %2").arg(QString(line1)).arg(QString(line2)), "D0");
 
     /* Print debug message */
     #define PQDBGL(msg) {\
         pqdbg_current_line_inc();\
         QString m(msg);\
         for(int l = 0; l < PQDBG_LVL_C; l++) { m.prepend("  "); }\
-        default_ub_write(m, QString("D:%1 L%2: ").arg(pqdbg_get_current_line()).arg(PQDBG_LVL_C));\
+        /*default_ub_write(m, QString("D%1 L%2").arg(pqdbg_get_current_line()).arg(PQDBG_LVL_C));*/\
+        pqdbg_send_message(PQDBG_LVL_C, m, pqdbg_get_current_line());\
     }
 
     /* Start new debug with level 0 */
@@ -93,7 +115,30 @@ extern void pqdbg_set_current_lvl(int lvl);
 
     #define PQDBG_LVL_DONE()
     #define PQDBG_LVL_DONE_LPUP()
+
+    #define PQDBG_LVL_START()
+    #define PQDBGSEND(msgmap)
 #endif
+
+#define PQDBG_LVL_RETURN() {\
+    PQDBG_LVL_DONE();\
+    return;\
+}\
+
+#define PQDBG_LVL_RETURN_VAL(v) {\
+    PQDBG_LVL_DONE();\
+    return v;\
+}\
+
+#define PQDBG_LVL_RETURN_LPUP() {\
+    PQDBG_LVL_DONE_LPUP();\
+    return;\
+}\
+
+#define PQDBG_LVL_RETURN_VAL_LPUP(v) {\
+    PQDBG_LVL_DONE_LPUP();\
+    return v;\
+}\
 
 
 #ifdef PQSTATIC

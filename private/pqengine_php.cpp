@@ -1,11 +1,25 @@
+/****************************************************************************
+**
+** Copyright (C) 2015 WxMaper (http://wxmaper.ru)
+**
+** This file is part of the PQEngine.
+**
+** BEGIN LICENSE: MPL 2.0
+**
+** This Source Code Form is subject to the terms of the Mozilla Public
+** License, v. 2.0. If a copy of the MPL was not distributed with this
+** file, You can obtain one at http://mozilla.org/MPL/2.0/.
+**
+** END LICENSE
+**
+****************************************************************************/
+
 #include "pqengine_private.h"
 #include "phpqt5.h"
 
 int PQEnginePrivate::php_pqengine_startup(sapi_module_struct *sapi_module)
 {
-#ifdef PQDEBUG
-    PQDBG("PQEnginePrivate::php_pqengine_startup()");
-#endif
+    Q_UNUSED(sapi_module)
 
     /*
     if (php_module_startup(sapi_module, PHPQt5::phpqt5_module_entry(), 1) == FAILURE) {
@@ -18,23 +32,12 @@ int PQEnginePrivate::php_pqengine_startup(sapi_module_struct *sapi_module)
 
 int PQEnginePrivate::php_pqengine_deactivate()
 {
-#ifdef PQDEBUG
-    PQDBG("PQEnginePrivate::php_pqengine_deactivate()");
-#endif
-
     return SUCCESS;
 }
 
 size_t PQEnginePrivate::php_pqengine_ub_write(const char *str, size_t str_length)
 {
-#ifdef PQDEBUG
-    PQDBG_LVL_START(__FUNCTION__);
-    PQDBGLPUP(QString("[%1]: %2").arg(str_length).arg(str));
-#endif
-
     pq_ub_write(PHPQt5::toUTF8(str));
-
-    PQDBG_LVL_DONE();
     return str_length;
 }
 
@@ -50,21 +53,11 @@ void PQEnginePrivate::php_pqengine_error(int type, const char *format, ...)
 
 void PQEnginePrivate::php_pqengine_flush(void *server_context)
 {
-#ifdef PQDEBUG
-    PQDBG("PQEnginePrivate::php_pqengine_flush()");
-#endif
-
     Q_UNUSED(server_context)
-
-  //  php_handle_aborted_connection();
 }
 
 void PQEnginePrivate::php_pqengine_send_header(sapi_header_struct *sapi_header, void *server_context)
 {
-#ifdef PQDEBUG
-    PQDBG("PQEnginePrivate::php_pqengine_send_header()");
-#endif
-
     Q_UNUSED(sapi_header)
     Q_UNUSED(server_context)
 }
@@ -101,11 +94,12 @@ void PQEnginePrivate::php_pqengine_register_variables(zval *track_vars_array)
     }
 }
 #include <QTextCodec>
-void PQEnginePrivate::php_pqengine_log_message(char *message)
+void PQEnginePrivate::php_pqengine_log_message(char *message, int syslog_type_int)
 {
 #ifdef PQDEBUG
     PQDBG2("PQEnginePrivate::php_pqengine_log_message()", message);
 #endif
 
+    Q_UNUSED(syslog_type_int)
     pq_ub_write(PHPQt5::toUTF8(message));
 }

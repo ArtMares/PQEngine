@@ -1,56 +1,78 @@
-PQ_PHP_VERSION=7.0.4
-#PHP_SRC_PATH="D:/php-sdk/phpdev/vc14/x86/php-$${PQ_PHP_VERSION}-src"
+PQ_PHP_VERSION=7.1.1
+
+# Path to PHP sources
 PHP_SRC_PATH="D:/src/php-$${PQ_PHP_VERSION}-src"
 
-# for Windows only
-DEFINES += ZEND_WIN32
-DEFINES += PHP_WIN32
-DEFINES += WIN32
+# Path to directory containing the PHP library
+# > php7ts.dll or php7ts.lib for Windows OS
+# > libphp.so or libphp7.a for Unix-like OS
+PHP_LIB_PATH="D:/src/php-$${PQ_PHP_VERSION}-src/dev"
 
-# for Linux only
-#DEFINES += PTHREADS
+# Remove this define if need to build the standalone app
+DEFINES += PQENGINE_LIBRARY
 
-# use this define for debug messages
-#DEFINES += PQDEBUG
-#DEFINES += PQDETAILEDDEBUG
+# Use this define for build a statically library
 DEFINES += PQSTATIC
 
+# Use this define for debug messages
+DEFINES += PQDEBUG
+DEFINES += PQDETAILEDDEBUG
+
+##########################################
+###### Don't change contents below! ######
+##########################################
+QT += core xml
+
+contains(DEFINES, PQDEBUG) {
+    QT += network
+    TARGET = pqengine-debug
+} else {
+    TARGET = pqengine
+}
+
+contains(DEFINES, PQENGINE_LIBRARY) {
+    contains(DEFINES, PQENGINE_LIBRARY) {
+        CONFIG += staticlib
+    }
+    TEMPLATE = lib
+    CONFIG += c++11 qt
+} else {
+    TEMPLATE = app
+    CONFIG += c++11 qt
+    SOURCES += main.cpp
+}
+
+win32 {
+    LIBS += -L"$${PHP_LIB_PATH}/" -lphp7ts
+    DEFINES += ZEND_WIN32
+    DEFINES += PHP_WIN32
+    DEFINES += WIN32
+}
+
+unix {
+    LIBS += -L"$${PHP_LIB_PATH}/" -lphp7
+    DEFINES += PTHREADS
+}
+
+DEFINES += ZTS
 DEFINES += ZEND_ENABLE_STATIC_TSRMLS_CACHE
+DEFINES += "ZEND_DEBUG=0"
+
+MOC_DIR = .moc
+OBJECTS_DIR = .obj
 
 INCLUDEPATH += \
+    $${PHP_LIB_PATH}\
     $${PHP_SRC_PATH}\
     $${PHP_SRC_PATH}/main\
     $${PHP_SRC_PATH}/Zend\
     $${PHP_SRC_PATH}/TSRM\
     $${PHP_SRC_PATH}/ext/standard\
+    plastiqclasses/core\
+    plastiqclasses\
     private
 
-#LIBS += "$${PHP_SRC_PATH}/Release_TS/php7ts.dll"
-#LIBS += -L"$${PHP_SRC_PATH}/Release_TS/" -lphp7ts
-LIBS += -L"$${PHP_SRC_PATH}/dev/" -lphp7ts
-INCLUDEPATH += "$${PHP_SRC_PATH}/dev"
-DEPENDPATH += "$${PHP_SRC_PATH}/dev"
-
-
-#INCLUDEPATH += D:/pqengine/extensions/pqengine-widgets
-#LIBS += -L"D:/pqengine/extensions/build-pqengine-widgets-Desktop_Qt_5_6_0_MSVC2015_32bit-Release/release" -lpqengine-widgets
-
-##########################################
-##########################################
-##########################################
-QT       += core xml #gui widgets
-
-contains(DEFINES, PQDEBUG) {
-TARGET = pqengine-debug
-} else {
-TARGET = pqengine
-}
-
-TEMPLATE = lib
-CONFIG += c++11 qt staticlib
-
-DEFINES += ZTS
-DEFINES += "ZEND_DEBUG=0" # need for PHP 5.4.45
+DEPENDPATH += "$${PHP_LIB_PATH}"
 
 SOURCES += \
     pqengine.cpp \
@@ -58,46 +80,40 @@ SOURCES += \
     private/pqengine_php.cpp \
     private/pqengine_pq.cpp \
     private/phpqt5.cpp \
-    private/phpqt5_zim.cpp \
     private/phpqt5_pq.cpp \
-    private/phpqt5_zm.cpp \
     private/simplecrypt.cpp \
-    private/phpqt5_conversions.cpp \
-    private/phpqt5objectfactory.cpp \
-    private/phpqt5connection.cpp \
     private/phpqt5_zif.cpp \
-    classes/pqobject.cpp \
-    classes/pqtimer.cpp \
-    classes/pqcoreapplication.cpp \
-    classes/pqregexp.cpp \
-    classes/pqsettings.cpp \
     pqenginecore.cpp \
-    private/pqobject.cpp \
-    classes/pqthread.cpp \
-    classes/pqstandardpaths.cpp \
-    classes/pqevent.cpp \
-    classes/pqlibrary.cpp
+    plastiqobject.cpp \
+    plastiqmethod.cpp \
+    plastiqmetaobject.cpp \
+    private/plastiq_zim.cpp \
+    private/plastiqmetaobjectfactory.cpp \
+    private/plastiq_zif.cpp \
+    plastiqproperty.cpp \
+    private/plastiq.cpp \
+    private/plastiq_zm.cpp \
+    private/plastiq_connections.cpp \
+    private/plastiqthreadcreator.cpp \
+    private/qevent_cast.cpp \
+    private/plastiq_debug.cpp
 
 HEADERS += \
     pqengine.h\
     pqengine_global.h \
     ipqengineext.h \
-    pqclasses.h \
-    classes/pqobject.h \
-    classes/pqtimer.h \
-    classes/pqcoreapplication.h \
-    classes/pqregexp.h \
-    classes/pqsettings.h \
     private/pqengine_private.h \
     private/pqengine_private.h \
     private/phpqt5.h \
     private/simplecrypt.h \
     private/phpqt5objectfactory.h \
-    private/phpqt5connection.h \
     pqenginecore.h \
-    classes/pqobject_private.h \
-    classes/pqthread.h \
-    classes/pqstandardpaths.h \
-    classes/pqevent.h \
-    classes/pqlibrary.h \
-    pqtypes.h
+    pqtypes.h \
+    plastiqobject.h \
+    plastiqmethod.h \
+    plastiqmetaobject.h \
+    plastiq.h \
+    plastiqclasses/plastiqclasses.h \
+    plastiqproperty.h \
+    private/plastiqthreadcreator.h \
+    private/phpqt5constants.h
